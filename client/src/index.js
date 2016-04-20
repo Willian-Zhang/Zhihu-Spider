@@ -10,6 +10,14 @@ $("#submit").click(function() {
         url: $("#url").val()
     });
 })
+$("#fetch").click(function() {
+    socket.emit('fetch start', {
+        url: $("#url").val()
+    });
+})
+$("#display").click(function() {
+    socket.emit('display start');
+})
 var dataStore = [];
 
 socket.on('data', function(data) {

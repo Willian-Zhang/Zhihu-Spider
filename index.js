@@ -20,6 +20,12 @@ app.use('/css', express.static('./client/build'));
 app.get('/', function(req, res) {
     res.sendFile(__dirname + '/client/index.html');
 });
+app.get('/fetch', function(req, res) {
+    res.sendFile(__dirname + '/client/fetch.html');
+});
+app.get('/display', function(req, res) {
+    res.sendFile(__dirname + '/client/display.html');
+});
 
 app.listen(serverConfig.httpPort,function(){
 	console.log('server start at 127.0.0.1:%s',this.address().port)
