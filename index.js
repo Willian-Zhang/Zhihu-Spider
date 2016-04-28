@@ -15,13 +15,16 @@ io.on('connection', function(socket) {
       try {
         //======打開數據庫======//
         if(!db){
-          var db = yield MongoClient.connect(`mongodb://${dbConfig.address}:${dbConfig.port}/${dbConfig.dbname}`);
+          db = yield MongoClient.connect(`mongodb://${dbConfig.address}:${dbConfig.port}/${dbConfig.dbname}`);
+          socket.emit('notice', '數據庫 connected');
+        }else{
           socket.emit('notice', '數據庫 ready');
         }
         socket.on('fetch start', function(data) {
             Spider(data.url, socket, db);
         });
       } catch (e) {
+        socket.emit('notice', '數據庫 error');
         console.log(e);
       }
     });
