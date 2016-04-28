@@ -21,6 +21,10 @@ var _co = require('co');
 
 var _co2 = _interopRequireDefault(_co);
 
+var _databaseConfig = require('./database.config.js');
+
+var _databaseConfig2 = _interopRequireDefault(_databaseConfig);
+
 require('babel-polyfill');
 
 var _bluebird = require('bluebird');
@@ -29,7 +33,16 @@ var _bluebird2 = _interopRequireDefault(_bluebird);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var _marked = [SpiderMain].map(regeneratorRuntime.mark);
+var _marked = [SpiderMain, needsUpdate].map(regeneratorRuntime.mark);
+
+// in milliseconds
+function now() {
+    return new Date().getTime();
+}
+function needsUpdateTime() {
+    return now() - _spider2.default.updateThreshold * 1000;
+}
+//var needsUpdateTime =  now() - config.updateThreshold * 1000;
 
 function Spider(userPageUrl, socket, db) {
     (0, _co2.default)(SpiderMain(userPageUrl, socket, db));
@@ -98,6 +111,17 @@ function SpiderMain(userPageUrl, socket, db) {
             }
         }
     }, _marked[0], this, [[0, 19]]);
+}
+function needsUpdate(db, url) {
+    return regeneratorRuntime.wrap(function needsUpdate$(_context2) {
+        while (1) {
+            switch (_context2.prev = _context2.next) {
+                case 0:
+                case 'end':
+                    return _context2.stop();
+            }
+        }
+    }, _marked[1], this);
 }
 
 function getFriends(user, socket) {

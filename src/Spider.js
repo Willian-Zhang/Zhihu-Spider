@@ -2,8 +2,18 @@ import fetchFollwerOrFollwee from './fetchFollwerOrFollwee';
 import getUser from './getUser';
 import config from '../spider.config';
 import co from 'co';
+import dbConfig from './database.config.js';
 import 'babel-polyfill';
 import Promise from 'bluebird';
+
+// in milliseconds
+function now(){
+  return (new Date()).getTime();
+}
+function needsUpdateTime(){
+  return  now() - config.updateThreshold * 1000;
+}
+//var needsUpdateTime =  now() - config.updateThreshold * 1000;
 
 export function Spider(userPageUrl, socket, db) {
     co(SpiderMain(userPageUrl, socket, db));
@@ -44,7 +54,9 @@ function* SpiderMain(userPageUrl, socket, db) {
     }
 
 }
+function* needsUpdate(db, url){
 
+}
 
 function getFriends(user, socket) {
     if (!socket) {
