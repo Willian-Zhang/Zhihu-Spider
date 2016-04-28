@@ -3,7 +3,8 @@ module.exports = {
     cookie:'',
     _xsrf:'',
     // in number
-    concurrency:1,
+    concurrency:2,
     // update threshold for fetching, in seconds
-    updateThreshold:2592000
+    updateThreshold:2592000,
+    depth: 3
 };
