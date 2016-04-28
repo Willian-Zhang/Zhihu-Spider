@@ -6,22 +6,18 @@ import dbConfig from '../database.config.js';
 import 'babel-polyfill';
 import Promise from 'bluebird';
 
-// in milliseconds
-function now(){
-  return (new Date()).getTime();
-}
-function needsUpdateTime(){
-  return  now() - config.updateThreshold * 1000;
-}
-//var needsUpdateTime =  now() - config.updateThreshold * 1000;
-
-export function Spider(userPageUrl, socket, db) {
-    co(SpiderMain(userPageUrl, socket, db));
+var db;
+export function Spider(userPageUrl, socket, database) {
+    if(!db){
+        db = database;
+    }
+    co(SpiderMain(userPageUrl, socket));
 }
 
 
-function* SpiderMain(userPageUrl, socket, db) {
+function* SpiderMain(userPageUrl, socket) {
     try {
+        var depthNow = 0;
         //======抓取目标用户信息======//
         var user = yield getUser(userPageUrl);
         socket.emit('notice', '抓取用户信息成功');
@@ -50,19 +46,29 @@ function* SpiderMain(userPageUrl, socket, db) {
         socket.emit('data', result);
 
     } catch (err) {
+        socket.emit('notice', err);
         console.log(err);
     }
-
 }
-function* needsUpdate(db, url){
 
+// in milliseconds
+function now(){
+    return (new Date()).getTime();
 }
+function needsUpdateTime(){
+    return now() - config.updateThreshold * 1000;
+}
+//var needsUpdateTime =  now() - config.updateThreshold * 1000;
+
+function* fetchFromDB(url){
+    return db.collection(dbConfig.collection).findOne({url: url});
+};
 
 function getFriends(user, socket) {
     if (!socket) {
-        var socket = {
+        socket = {
             emit: () => {}
-        }
+        };
     }
     var works = [fetchFollwerOrFollwee({
         isFollowees: true,
@@ -87,9 +93,9 @@ function getFriends(user, socket) {
 
 function searchSameFriend(aFriend, myFriends, socket) {
     if (!socket) {
-        var socket = {
+        socket = {
             emit: () => {}
-        }
+        };
     }
     socket.emit("notice", "searchSameFriend with " + aFriend.name + "......");
     console.log("searchSameFriend with " + aFriend.name + "......");

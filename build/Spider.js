@@ -33,49 +33,47 @@ var _bluebird2 = _interopRequireDefault(_bluebird);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var _marked = [SpiderMain, needsUpdate].map(regeneratorRuntime.mark);
+var _marked = [SpiderMain, fetchFromDB].map(regeneratorRuntime.mark);
 
-// in milliseconds
-function now() {
-    return new Date().getTime();
-}
-function needsUpdateTime() {
-    return now() - _spider2.default.updateThreshold * 1000;
-}
-//var needsUpdateTime =  now() - config.updateThreshold * 1000;
-
-function Spider(userPageUrl, socket, db) {
-    (0, _co2.default)(SpiderMain(userPageUrl, socket, db));
+var db;
+function Spider(userPageUrl, socket, database) {
+    if (!db) {
+        db = database;
+    }
+    (0, _co2.default)(SpiderMain(userPageUrl, socket));
 }
 
-function SpiderMain(userPageUrl, socket, db) {
-    var user, myFriendsTmp, myFriends, result;
+function SpiderMain(userPageUrl, socket) {
+    var depthNow, user, myFriendsTmp, myFriends, result;
     return regeneratorRuntime.wrap(function SpiderMain$(_context) {
         while (1) {
             switch (_context.prev = _context.next) {
                 case 0:
                     _context.prev = 0;
-                    _context.next = 3;
+                    depthNow = 0;
+                    //======抓取目标用户信息======//
+
+                    _context.next = 4;
                     return (0, _getUser2.default)(userPageUrl);
 
-                case 3:
+                case 4:
                     user = _context.sent;
 
                     socket.emit('notice', '抓取用户信息成功');
                     socket.emit('get user', user);
 
                     //======抓取目标用户好友列表======//
-                    _context.next = 8;
+                    _context.next = 9;
                     return getFriends(user, socket);
 
-                case 8:
+                case 9:
                     myFriendsTmp = _context.sent;
-                    _context.next = 11;
+                    _context.next = 12;
                     return _bluebird2.default.map(myFriendsTmp, function (myFriend) {
                         return (0, _getUser2.default)(myFriend.url);
                     }, { concurrency: _spider2.default.concurrency ? _spider2.default.concurrency : 3 });
 
-                case 11:
+                case 12:
                     myFriends = _context.sent;
 
                     socket.emit('data', myFriends.map(function (friend) {
@@ -86,47 +84,61 @@ function SpiderMain(userPageUrl, socket, db) {
                     }));
 
                     //======找出相同好友======//
-                    _context.next = 15;
+                    _context.next = 16;
                     return _bluebird2.default.map(myFriends, function (myFriend) {
                         return searchSameFriend(myFriend, myFriends, socket);
                     }, { concurrency: _spider2.default.concurrency ? _spider2.default.concurrency : 3 });
 
-                case 15:
+                case 16:
                     result = _context.sent;
 
                     socket.emit('data', result);
 
-                    _context.next = 22;
+                    _context.next = 24;
                     break;
 
-                case 19:
-                    _context.prev = 19;
+                case 20:
+                    _context.prev = 20;
                     _context.t0 = _context['catch'](0);
 
+                    socket.emit('notice', _context.t0);
                     console.log(_context.t0);
 
-                case 22:
+                case 24:
                 case 'end':
                     return _context.stop();
             }
         }
-    }, _marked[0], this, [[0, 19]]);
+    }, _marked[0], this, [[0, 20]]);
 }
-function needsUpdate(db, url) {
-    return regeneratorRuntime.wrap(function needsUpdate$(_context2) {
+
+// in milliseconds
+function now() {
+    return new Date().getTime();
+}
+function needsUpdateTime() {
+    return now() - _spider2.default.updateThreshold * 1000;
+}
+//var needsUpdateTime =  now() - config.updateThreshold * 1000;
+
+function fetchFromDB(url) {
+    return regeneratorRuntime.wrap(function fetchFromDB$(_context2) {
         while (1) {
             switch (_context2.prev = _context2.next) {
                 case 0:
+                    return _context2.abrupt('return', db.collection(_databaseConfig2.default.collection).findOne({ url: url }));
+
+                case 1:
                 case 'end':
                     return _context2.stop();
             }
         }
     }, _marked[1], this);
-}
+};
 
 function getFriends(user, socket) {
     if (!socket) {
-        var socket = {
+        socket = {
             emit: function emit() {}
         };
     }
@@ -153,7 +165,7 @@ function getFriends(user, socket) {
 
 function searchSameFriend(aFriend, myFriends, socket) {
     if (!socket) {
-        var socket = {
+        socket = {
             emit: function emit() {}
         };
     }
