@@ -21,7 +21,7 @@ var _co = require('co');
 
 var _co2 = _interopRequireDefault(_co);
 
-var _databaseConfig = require('./database.config.js');
+var _databaseConfig = require('../database.config.js');
 
 var _databaseConfig2 = _interopRequireDefault(_databaseConfig);
 

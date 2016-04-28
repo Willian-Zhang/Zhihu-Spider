@@ -2,7 +2,7 @@ import fetchFollwerOrFollwee from './fetchFollwerOrFollwee';
 import getUser from './getUser';
 import config from '../spider.config';
 import co from 'co';
-import dbConfig from './database.config.js';
+import dbConfig from '../database.config.js';
 import 'babel-polyfill';
 import Promise from 'bluebird';
 
