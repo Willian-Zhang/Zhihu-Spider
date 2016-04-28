@@ -67,12 +67,12 @@ function getFollwerOrFollwee(user, offset, isFollowees, socket) {
 function parseCard(text) {
     var result = {};
     var re1 = /data-id=\"(\S*)\"/g;
-    var re2 = /<h2 class=\"zm-list-content-title\">.*>(.*)<\/a><\/h2>/g
+    // var re2 = /<h2 class=\"zm-list-content-title\">.*>(.*)<\/a><\/h2>/g
     var re3 = /href=\"(https:\/\/www\.zhihu\.com\/people\/\S*)\"/g;
     re1.exec(text);
     result.hash_id = RegExp.$1;
-    re2.exec(text);
-    result.name = RegExp.$1;
+    // re2.exec(text);
+    // result.name = RegExp.$1;
     re3.exec(text);
     result.url = RegExp.$1;
     return result;

@@ -33,83 +33,126 @@ var _bluebird2 = _interopRequireDefault(_bluebird);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var _marked = [SpiderMain, fetchFromDB].map(regeneratorRuntime.mark);
+var _marked = [SpiderMain, getUserFromDB, updateUserToDB, insertUserToDB, getFriends, getFriendsFromWeb].map(regeneratorRuntime.mark);
 
-var db;
+var collection;
 function Spider(userPageUrl, socket, database) {
-    if (!db) {
-        db = database;
+    if (!collection) {
+        collection = database.collection(_databaseConfig2.default.collection);
     }
-    (0, _co2.default)(SpiderMain(userPageUrl, socket));
+    (0, _co2.default)(SpiderMain(userPageUrl, socket, 0));
 }
 
-function SpiderMain(userPageUrl, socket) {
-    var depthNow, user, myFriendsTmp, myFriends, result;
+function SpiderMain(userPageUrl, socket, depth) {
+    var user, userFromDB, isUpdate, isFromDB, dbUser, friends;
     return regeneratorRuntime.wrap(function SpiderMain$(_context) {
         while (1) {
             switch (_context.prev = _context.next) {
                 case 0:
                     _context.prev = 0;
-                    depthNow = 0;
-                    //======抓取目标用户信息======//
+                    _context.next = 3;
+                    return getUserFromDB(userPageUrl);
 
-                    _context.next = 4;
+                case 3:
+                    userFromDB = _context.sent;
+
+                    if (userFromDB) {
+                        isUpdate = shouldUpdate(userFromDB);
+                        isFromDB = !isUpdate;
+                    } else {
+                        isUpdate = isFromDB = false;
+                    }
+
+                    if (!isFromDB) {
+                        _context.next = 9;
+                        break;
+                    }
+
+                    user = userFromDB;
+                    _context.next = 14;
+                    break;
+
+                case 9:
+                    _context.next = 11;
                     return (0, _getUser2.default)(userPageUrl);
 
-                case 4:
+                case 11:
                     user = _context.sent;
 
                     socket.emit('notice', '抓取用户信息成功');
                     socket.emit('get user', user);
 
-                    //======抓取目标用户好友列表======//
-                    _context.next = 9;
-                    return getFriends(user, socket);
+                case 14:
+                    if (!(depth >= _spider2.default.depth)) {
+                        _context.next = 16;
+                        break;
+                    }
 
-                case 9:
-                    myFriendsTmp = _context.sent;
-                    _context.next = 12;
-                    return _bluebird2.default.map(myFriendsTmp, function (myFriend) {
-                        return (0, _getUser2.default)(myFriend.url);
-                    }, { concurrency: _spider2.default.concurrency ? _spider2.default.concurrency : 3 });
-
-                case 12:
-                    myFriends = _context.sent;
-
-                    socket.emit('data', myFriends.map(function (friend) {
-                        return {
-                            "user": friend,
-                            "sameFriends": []
-                        };
-                    }));
-
-                    //======找出相同好友======//
-                    _context.next = 16;
-                    return _bluebird2.default.map(myFriends, function (myFriend) {
-                        return searchSameFriend(myFriend, myFriends, socket);
-                    }, { concurrency: _spider2.default.concurrency ? _spider2.default.concurrency : 3 });
+                    return _context.abrupt('return', user);
 
                 case 16:
-                    result = _context.sent;
+                    // save user TODO
+                    dbUser = formDBUser(user);
 
-                    socket.emit('data', result);
+                    if (!isUpdate) {
+                        _context.next = 22;
+                        break;
+                    }
 
+                    _context.next = 20;
+                    return updateUserToDB(user, { $set: dbUser });
+
+                case 20:
                     _context.next = 24;
                     break;
 
-                case 20:
-                    _context.prev = 20;
+                case 22:
+                    _context.next = 24;
+                    return insertUserToDB(dbUser);
+
+                case 24:
+                    if (!isUpdate) {
+                        _context.next = 30;
+                        break;
+                    }
+
+                    _context.next = 27;
+                    return getFriendsFromWeb(user, socket);
+
+                case 27:
+                    friends = _context.sent;
+                    _context.next = 33;
+                    break;
+
+                case 30:
+                    _context.next = 32;
+                    return getFriends(user, socket);
+
+                case 32:
+                    friends = _context.sent;
+
+                case 33:
+                    _context.next = 35;
+                    return _bluebird2.default.map(friends, function (friend) {
+                        return SpiderMain(friend.url, socket, depth + 1);
+                    }, { concurrency: _spider2.default.concurrency });
+
+                case 35:
+                    return _context.abrupt('return', _context.sent);
+
+                case 38:
+                    _context.prev = 38;
                     _context.t0 = _context['catch'](0);
 
                     socket.emit('notice', _context.t0);
                     console.log(_context.t0);
 
-                case 24:
+                case 42:
                 case 'end':
                     return _context.stop();
             }
         }
-    }, _marked[0], this, [[0, 20]]);
+    }, _marked[0], this, [[0, 38]]);
 }
 
 // in milliseconds
@@ -120,47 +163,140 @@ function needsUpdateTime() {
     return now() - _spider2.default.updateThreshold * 1000;
 }
 //var needsUpdateTime =  now() - config.updateThreshold * 1000;
+function shouldUpdate(user) {
+    return user.updateTime < needsUpdateTime();
+}
 
-function fetchFromDB(url) {
-    return regeneratorRuntime.wrap(function fetchFromDB$(_context2) {
+formDBUser = function formDBUser(user) {
+    user._id = user.hash_id;
+    delete user.hash_id;
+    user.updateTime = now();
+
+    return user;
+};
+
+function getUserFromDB(url) {
+    return regeneratorRuntime.wrap(function getUserFromDB$(_context2) {
         while (1) {
             switch (_context2.prev = _context2.next) {
                 case 0:
-                    return _context2.abrupt('return', db.collection(_databaseConfig2.default.collection).findOne({ url: url }));
+                    _context2.next = 2;
+                    return collection.findOne({ url: url });
 
-                case 1:
+                case 2:
+                    return _context2.abrupt('return', _context2.sent);
+
+                case 3:
                 case 'end':
                     return _context2.stop();
             }
         }
     }, _marked[1], this);
-};
+}
+function updateUserToDB(user, updates) {
+    return regeneratorRuntime.wrap(function updateUserToDB$(_context3) {
+        while (1) {
+            switch (_context3.prev = _context3.next) {
+                case 0:
+                    _context3.next = 2;
+                    return collection.findOneAndUpdate({ _id: user.hash_id }, updates);
+
+                case 2:
+                    return _context3.abrupt('return', _context3.sent);
+
+                case 3:
+                case 'end':
+                    return _context3.stop();
+            }
+        }
+    }, _marked[2], this);
+}
+function insertUserToDB(user) {
+    return regeneratorRuntime.wrap(function insertUserToDB$(_context4) {
+        while (1) {
+            switch (_context4.prev = _context4.next) {
+                case 0:
+                    _context4.next = 2;
+                    return collection.insertOne(user);
+
+                case 2:
+                    return _context4.abrupt('return', _context4.sent);
+
+                case 3:
+                case 'end':
+                    return _context4.stop();
+            }
+        }
+    }, _marked[3], this);
+}
 
 function getFriends(user, socket) {
-    if (!socket) {
-        socket = {
-            emit: function emit() {}
-        };
-    }
-    var works = [(0, _fetchFollwerOrFollwee2.default)({
-        isFollowees: true,
-        user: user
-    }, socket), (0, _fetchFollwerOrFollwee2.default)({
-        user: user
-    }, socket)];
-    return _bluebird2.default.all(works).then(function (result) {
-        var followees = result[0];
-        var followers = result[1];
-        var friends = [];
-        followers.forEach(function (follower) {
-            followees.forEach(function (followee) {
-                if (follower.hash_id === followee.hash_id) {
-                    friends.push(follower);
-                }
-            });
-        });
-        return friends;
-    });
+    return regeneratorRuntime.wrap(function getFriends$(_context5) {
+        while (1) {
+            switch (_context5.prev = _context5.next) {
+                case 0:
+                    if (!user.followers) {
+                        _context5.next = 2;
+                        break;
+                    }
+
+                    return _context5.abrupt('return', user.followers.concat(user.followees));
+
+                case 2:
+                    _context5.next = 4;
+                    return getFriendsFromWeb(user, socket);
+
+                case 4:
+                    return _context5.abrupt('return', _context5.sent);
+
+                case 5:
+                case 'end':
+                    return _context5.stop();
+            }
+        }
+    }, _marked[4], this);
+}
+
+function getFriendsFromWeb(user, socket) {
+    var works, followees, followers, friends;
+    return regeneratorRuntime.wrap(function getFriendsFromWeb$(_context6) {
+        while (1) {
+            switch (_context6.prev = _context6.next) {
+                case 0:
+                    if (!socket) {
+                        socket = {
+                            emit: function emit() {}
+                        };
+                    }
+                    _context6.next = 3;
+                    return [(0, _fetchFollwerOrFollwee2.default)({
+                        isFollowees: true,
+                        user: user
+                    }, socket), (0, _fetchFollwerOrFollwee2.default)({
+                        user: user
+                    }, socket)];
+
+                case 3:
+                    works = _context6.sent;
+                    followees = works[0];
+                    followers = works[1];
+                    _context6.next = 8;
+                    return updateUserToDB(user, { $set: { followers: followers, followees: followees } });
+
+                case 8:
+                    friends = followers.map(function (follower) {
+                        return followees.filter(function (followee) {
+                            return follower.hash_id === followee.hash_id;
+                        });
+                    });
+                    return _context6.abrupt('return', friends);
+
+                case 10:
+                case 'end':
+                    return _context6.stop();
+            }
+        }
+    }, _marked[5], this);
 }
 
 function searchSameFriend(aFriend, myFriends, socket) {

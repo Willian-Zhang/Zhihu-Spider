@@ -6,44 +6,81 @@ import dbConfig from '../database.config.js';
 import 'babel-polyfill';
 import Promise from 'bluebird';
 
-var db;
+var collection;
 export function Spider(userPageUrl, socket, database) {
-    if(!db){
-        db = database;
+    if(!collection){
+        collection = database.collection(dbConfig.collection);
     }
-    co(SpiderMain(userPageUrl, socket));
+    co(SpiderMain(userPageUrl, socket, 0));
 }
 
 
-function* SpiderMain(userPageUrl, socket) {
+function* SpiderMain(userPageUrl, socket, depth) {
     try {
-        var depthNow = 0;
-        //======抓取目标用户信息======//
-        var user = yield getUser(userPageUrl);
-        socket.emit('notice', '抓取用户信息成功');
-        socket.emit('get user', user);
+        var user;
+        
+        var userFromDB = yield getUserFromDB(userPageUrl);
+        
+        var isUpdate, isFromDB;
+        if(userFromDB){
+            isUpdate = shouldUpdate(userFromDB)
+            isFromDB = !isUpdate;
+        }else{
+            isUpdate = isFromDB = false;
+        }
+        
+        if( isFromDB ){
+            user = userFromDB;
+        }else{
+            //======抓取目标用户信息======//
+            //URL -> user{id, name, followerAmount, followeeAmount}
+            user = yield getUser(userPageUrl);
+            socket.emit('notice', '抓取用户信息成功');
+            socket.emit('get user', user);
+        }
+        
 
-
-        //======抓取目标用户好友列表======//
-        var myFriendsTmp = yield getFriends(user, socket);
-
-
-        //======好友列表完善======//
-        var myFriends = yield Promise.map(myFriendsTmp,
-            myFriend => getUser(myFriend.url),
-            { concurrency: config.concurrency ? config.concurrency : 3 }
+        // should grep next level
+        if(depth >= config.depth){
+            return user;
+        }
+        // save user TODO
+        var dbUser = formDBUser(user);
+        if(isUpdate){
+            yield updateUserToDB(user, {$set: dbUser});
+        }else{
+            yield insertUserToDB(dbUser);
+        }
+        
+        //======抓下一層======//
+        //抓取目标用户好友列表
+        //user -> [ friend{id, name, url}... ]
+        var friends;
+        if(isUpdate){
+            friends = yield getFriendsFromWeb(user, socket);
+        }else{
+            friends = yield getFriends(user, socket);
+        }
+        
+        //[ friend ] => [ user | grep mission ]
+        return yield Promise.map(friends,
+            friend => SpiderMain(friend.url, socket, depth+1),
+            { concurrency: config.concurrency }
         )
-        socket.emit('data', myFriends.map(friend => ({
-            "user": friend,
-            "sameFriends": []
-        })));
-
+        // socket.emit('data', myFriends.map(friend => ({
+        //     "user": friend,
+        //     "sameFriends": []
+        // })));
+        
+        
+        
+        
         //======找出相同好友======//
-        var result = yield Promise.map(myFriends,
-            myFriend => searchSameFriend(myFriend, myFriends, socket),
-            { concurrency: config.concurrency ? config.concurrency : 3 }
-        );
-        socket.emit('data', result);
+        // var result = yield Promise.map(myFriends,
+        //     myFriend => searchSameFriend(myFriend, myFriends, socket),
+        //     { concurrency: config.concurrency }
+        // );
+        // socket.emit('data', result);
 
     } catch (err) {
         socket.emit('notice', err);
@@ -59,36 +96,58 @@ function needsUpdateTime(){
     return now() - config.updateThreshold * 1000;
 }
 //var needsUpdateTime =  now() - config.updateThreshold * 1000;
+function shouldUpdate(user){
+    return user.updateTime < needsUpdateTime();
+}
 
-function* fetchFromDB(url){
-    return db.collection(dbConfig.collection).findOne({url: url});
-};
+formDBUser = user => {
+    user._id = user.hash_id;
+    delete user.hash_id;
+    user.updateTime = now();
+    
+    return user;
+}
 
-function getFriends(user, socket) {
+function* getUserFromDB(url){
+    return yield collection.findOne({url: url});
+}
+function* updateUserToDB(user, updates){
+    return yield collection.findOneAndUpdate({_id:user.hash_id}, updates);
+}
+function* insertUserToDB(user){
+    return yield collection.insertOne(user);
+}
+
+function* getFriends(user, socket){
+    if(user.followers){
+        return user.followers.concat(user.followees);
+    }
+    return yield getFriendsFromWeb(user, socket);
+}
+
+function* getFriendsFromWeb(user, socket) {
     if (!socket) {
         socket = {
             emit: () => {}
         };
     }
-    var works = [fetchFollwerOrFollwee({
-        isFollowees: true,
-        user: user
-    }, socket), fetchFollwerOrFollwee({
-        user: user
-    }, socket)];
-    return Promise.all(works).then(result => {
-        var followees = result[0];
-        var followers = result[1];
-        var friends = [];
-        followers.forEach(function(follower) {
-            followees.forEach(function(followee) {
-                if (follower.hash_id === followee.hash_id) {
-                    friends.push(follower);
-                }
-            });
-        });
-        return friends;
-    });
+    var works = yield [   
+        fetchFollwerOrFollwee({
+            isFollowees: true,
+            user: user
+        }, socket),
+        fetchFollwerOrFollwee({
+            user: user
+        }, socket)
+    ];
+    
+    var followees = works[0];
+    var followers = works[1];
+    
+    yield updateUserToDB(user, {$set: {followers: followers, followees: followees}});
+    
+    var friends = followers.map(follower => followees.filter(followee => follower.hash_id === followee.hash_id));
+    return friends;
 }
 
 function searchSameFriend(aFriend, myFriends, socket) {
