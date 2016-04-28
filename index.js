@@ -4,10 +4,26 @@ var bodyParser = require('body-parser');
 var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
+var dbConfig = require('./database.config.js');
 var serverConfig = require('./server.config');
+var co = require('co');
+var MongoClient = require('mongodb').MongoClient;
+
+var db;
 io.on('connection', function(socket) {
-    socket.on('fetch start', function(data) {
-        Spider(data.url, socket);
+    co(function *(){
+      try {
+        //======打開數據庫======//
+        if(!db){
+          var db = yield MongoClient.connect(`mongodb://${dbConfig.address}:${dbConfig.port}/${dbConfig.dbname}`);
+          socket.emit('notice', '數據庫 ready');
+        }
+        socket.on('fetch start', function(data) {
+            Spider(data.url, socket, db);
+        });
+      } catch (e) {
+        console.log(e);
+      }
     });
 });
 server.listen(serverConfig.socketPort);

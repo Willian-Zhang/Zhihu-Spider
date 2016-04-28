@@ -5,12 +5,12 @@ import co from 'co';
 import 'babel-polyfill';
 import Promise from 'bluebird';
 
-export function Spider(userPageUrl, socket) {
-    co(SpiderMain(userPageUrl, socket));
+export function Spider(userPageUrl, socket, db) {
+    co(SpiderMain(userPageUrl, socket, db));
 }
 
 
-function* SpiderMain(userPageUrl, socket) {
+function* SpiderMain(userPageUrl, socket, db) {
     try {
         //======抓取目标用户信息======//
         var user = yield getUser(userPageUrl);
