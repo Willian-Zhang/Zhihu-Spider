@@ -20,12 +20,13 @@ function* SpiderMain(userPageUrl, socket, depth) {
         
         var userFromDB = yield storage.getUser(userPageUrl);
         
-        var isUpdate, isFromDB;
+        var isUpdate, isFromDB, shouldSave;
         if(userFromDB){
-            isUpdate = shouldUpdate(userFromDB)
+            shouldSave = isUpdate = shouldUpdate(userFromDB)
             isFromDB = !isUpdate;
         }else{
             isUpdate = isFromDB = false;
+            shouldSave = true;
         }
         
         if( isFromDB ){
@@ -44,11 +45,13 @@ function* SpiderMain(userPageUrl, socket, depth) {
             return user;
         }
         // save user TODO
-        var dbUser = formDBUser(user, userPageUrl);
-        if(isUpdate){
-            yield storage.updateUser(user, {$set: dbUser});
-        }else if (!isFromDB){
-            yield storage.insertUser(dbUser);
+        if(shouldSave){
+            var dbUser = formDBUser(user, userPageUrl);
+            if(isUpdate){
+                yield storage.updateUser(user, {$set: dbUser});
+            }else{
+                yield storage.insertUser(dbUser);
+            }
         }
         
         //======抓下一層======//
