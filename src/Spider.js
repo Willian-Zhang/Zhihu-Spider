@@ -45,7 +45,7 @@ function* SpiderMain(userPageUrl, socket, depth) {
             return user;
         }
         // save user TODO
-        var dbUser = formDBUser(user);
+        var dbUser = formDBUser(user, userPageUrl);
         if(isUpdate){
             yield updateUserToDB(user, {$set: dbUser});
         }else{
@@ -100,11 +100,11 @@ function shouldUpdate(user){
     return user.updateTime < needsUpdateTime();
 }
 
-formDBUser = user => {
+var formDBUser = (user, url) => {
     user._id = user.hash_id;
     delete user.hash_id;
     user.updateTime = now();
-    
+    user.url = url;
     return user;
 }
 
