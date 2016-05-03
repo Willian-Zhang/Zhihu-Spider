@@ -2,15 +2,14 @@ import fetchFollwerOrFollwee from './fetchFollwerOrFollwee';
 import getUser from './getUser';
 import config from '../spider.config';
 import co from 'co';
-import dbConfig from '../database.config.js';
 import 'babel-polyfill';
 import Promise from 'bluebird';
+import Storage from './Storage';
 
-var collection;
+var storage;
 export function Spider(userPageUrl, socket, database) {
-    if(!collection){
-        collection = database.collection(dbConfig.collection);
-    }
+    if(!storage)
+        storage = Storage(database);
     co(SpiderMain(userPageUrl, socket, 0));
 }
 
@@ -19,7 +18,7 @@ function* SpiderMain(userPageUrl, socket, depth) {
     try {
         var user;
         
-        var userFromDB = yield getUserFromDB(userPageUrl);
+        var userFromDB = yield storage.getUser(userPageUrl);
         
         var isUpdate, isFromDB;
         if(userFromDB){
@@ -47,9 +46,9 @@ function* SpiderMain(userPageUrl, socket, depth) {
         // save user TODO
         var dbUser = formDBUser(user, userPageUrl);
         if(isUpdate){
-            yield updateUserToDB(user, {$set: dbUser});
-        }else{
-            yield insertUserToDB(dbUser);
+            yield storage.updateUser(user, {$set: dbUser});
+        }else if (!isFromDB){
+            yield storage.insertUser(dbUser);
         }
         
         //======抓下一層======//
@@ -102,20 +101,9 @@ function shouldUpdate(user){
 
 var formDBUser = (user, url) => {
     user._id = user.hash_id;
-    delete user.hash_id;
     user.updateTime = now();
     user.url = url;
     return user;
-}
-
-function* getUserFromDB(url){
-    return yield collection.findOne({url: url});
-}
-function* updateUserToDB(user, updates){
-    return yield collection.findOneAndUpdate({_id:user.hash_id}, updates);
-}
-function* insertUserToDB(user){
-    return yield collection.insertOne(user);
 }
 
 function* getFriends(user, socket){
@@ -144,7 +132,7 @@ function* getFriendsFromWeb(user, socket) {
     var followees = works[0];
     var followers = works[1];
     
-    yield updateUserToDB(user, {$set: {followers: followers, followees: followees}});
+    yield storage.updateUser(user, {$set: {followers: followers, followees: followees}});
     
     var friends = followers.map(follower => followees.filter(followee => follower.hash_id === followee.hash_id));
     return friends;
