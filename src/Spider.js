@@ -131,7 +131,7 @@ var formDBUser = (user, url) => {
 
 function* getFriends(user, socket){
     if(user.followers){
-        return user.followers.concat(user.followees);
+        return merge(user.followers, user.followees);
     }
     return yield getFriendsFromWeb(user, socket);
 }
@@ -152,12 +152,12 @@ function* getFriendsFromWeb(user, socket) {
         }, socket)
     ];
     
-    var followees = works[0];
-    var followers = works[1];
+    var followees = works[0].map(f=>f.url);
+    var followers = works[1].map(f=>f.url);
     
     yield storage.updateUser(user, {$set: {followers: followers, followees: followees}});
     
-    var friends = followers.map(follower => followees.filter(followee => follower.hash_id === followee.hash_id));
+    var friends = merge(followers,followees);
     return friends;
 }
 
