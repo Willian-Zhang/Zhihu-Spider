@@ -2,7 +2,15 @@ node_modules/
 
 # IDE
 .idea
+.vscode
 
 # config
 *config.js
 *config.json
+
+#log
+*.log
+
+#build
+build/
+client/build/
