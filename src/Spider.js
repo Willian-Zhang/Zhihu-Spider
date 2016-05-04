@@ -5,17 +5,34 @@ import co from 'co';
 import 'babel-polyfill';
 import Promise from 'bluebird';
 import Storage from './Storage';
+import Queue from 'promise-queue';
 
 var storage;
+var SpiderControl = {
+    urls: new Set(),
+    lastDepthJobCount : 0,
+    lastDepthJobEnd : 0
+}
+
+var queue = new Queue(config.concurrency, Infinity);
+
 export function Spider(userPageUrl, socket, database) {
     if(!storage)
         storage = Storage(database);
     co(SpiderMain(userPageUrl, socket, 0));
 }
 
+var merge = (s1, s2) => s1.concat(s2.filter(ele => !s1.includes(ele)));
+
 
 function* SpiderMain(userPageUrl, socket, depth) {
     try {
+        if(SpiderControl.urls.has(userPageUrl)){
+            return
+        }else{
+            SpiderControl.urls.add(userPageUrl);
+        }
+        
         var user;
         
         var userFromDB = yield storage.getUser(userPageUrl);
@@ -63,12 +80,15 @@ function* SpiderMain(userPageUrl, socket, depth) {
         }else{
             friends = yield getFriends(user, socket);
         }
+        console.log(friends);
         
-        //[ friend ] => [ user | grep mission ]
-        return yield Promise.map(friends,
-            friend => SpiderMain(friend.url, socket, depth+1),
-            { concurrency: config.concurrency }
-        )
+        //[ friend ] => ??
+        friends.map(friend => ()=> new Promise(SpiderMain(friend, socket, depth+1)) ).map(queue.add);
+        
+        
+        return ;
+        
+        
         // socket.emit('data', myFriends.map(friend => ({
         //     "user": friend,
         //     "sameFriends": []
