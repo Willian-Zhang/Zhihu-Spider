@@ -59,7 +59,7 @@ function* SpiderMain(username, socket, depth) {
             user = yield zhihuAPI.User.getUserByName(username);
         }
         if(user){
-            socket.emit('notice', `抓取用户信息成功: ${username}`);
+            socket.emit('notice', `獲取用户信息成功: ${username}, from ${isFromDB? 'DB' : 'Web'}`);
             socket.emit('get user', user);
         }else{
             socket.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);

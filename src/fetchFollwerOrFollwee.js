@@ -20,16 +20,16 @@ export default function fetchFollwerOrFollwee(options, socket) {
 }
 
 function getFollwerOrFollwee(user, offset, isFollowees, socket) {
-    socket.emit('notice','开始抓取 ' + user.name + ' 的第 ' + offset + '-' + (offset + 20) + ' 位' + (isFollowees ? '关注的人' : '关注者'));
-    console.log('开始抓取 ' + user.name + ' 的第 ' + offset + '-' + (offset + 20) + ' 位' + (isFollowees ? '关注的人' : '关注者'));
-    var params = JSON.stringify({offset: offset, order_by: "created", hash_id: user.id});
+    var what = `${user.name} 的第 ${offset}-${offset+20} 位${isFollowees?'關注了':'关注者'}`;
+    socket.emit('notice',`开始抓取 ${what}`); console.log(`开始抓取 ${what}`);
+    
     return new Promise((resolve, reject) => {
         request({
             method: 'POST',
             url: isFollowees ? 'https://www.zhihu.com/node/ProfileFolloweesListV2' : 'https://www.zhihu.com/node/ProfileFollowersListV2',
             form: {
                 method: "next",
-                params: params,
+                params: JSON.stringify({offset: offset, order_by: "created", hash_id: user.id}),
                 _xsrf: config._xsrf
             },
             headers: {
@@ -48,9 +48,7 @@ function getFollwerOrFollwee(user, offset, isFollowees, socket) {
                     throw ('Body is undefined');
                 }
             } catch (e) {
-                console.log("\n======ERROR======");
-                console.log(e, body);
-                console.log("======ERROR======\n");
+                console.log(`${what} 抓取錯誤`);
             }
             if (err) {
                 if (err.code == 'ETIMEDOUT' || err.code == 'ESOCKETTIMEDOUT') {
