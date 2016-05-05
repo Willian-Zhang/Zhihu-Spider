@@ -1,4 +1,5 @@
 import request from 'request';
+import cheerio from 'cheerio';
 import Promise from 'bluebird';
 import config from '../spider.config';
 import _ from 'lodash';
@@ -6,7 +7,7 @@ import _ from 'lodash';
 export default function fetchFollwerOrFollwee(options, socket) {
     var user = options.user;
     var isFollowees = options.isFollowees;
-    var grounpAmount = isFollowees ? Math.ceil(user.followeeAmount / 20) : Math.ceil(user.followerAmount / 20);
+    var grounpAmount = isFollowees ? Math.ceil(user.followee||0 / 20) : Math.ceil(user.follower||0 / 20);
     var offsets = [];
     for (var i = 0; i < grounpAmount; i++) {
         offsets.push(i * 20);
@@ -21,7 +22,7 @@ export default function fetchFollwerOrFollwee(options, socket) {
 function getFollwerOrFollwee(user, offset, isFollowees, socket) {
     socket.emit('notice','开始抓取 ' + user.name + ' 的第 ' + offset + '-' + (offset + 20) + ' 位' + (isFollowees ? '关注的人' : '关注者'));
     console.log('开始抓取 ' + user.name + ' 的第 ' + offset + '-' + (offset + 20) + ' 位' + (isFollowees ? '关注的人' : '关注者'));
-    var params = "{\"offset\":{{counter}},\"order_by\":\"created\",\"hash_id\":\"{{hash_id}}\"}".replace(/{{counter}}/, offset).replace(/{{hash_id}}/, user.hash_id);
+    var params = JSON.stringify({offset: offset, order_by: "created", hash_id: user.id});
     return new Promise((resolve, reject) => {
         request({
             method: 'POST',
@@ -65,17 +66,10 @@ function getFollwerOrFollwee(user, offset, isFollowees, socket) {
 }
 
 function parseCard(text) {
-    var result = {};
-    var re1 = /data-id=\"(\S*)\"/g;
-    // var re2 = /<h2 class=\"zm-list-content-title\">.*>(.*)<\/a><\/h2>/g
-    var re3 = /href=\"(https:\/\/www\.zhihu\.com\/people\/\S*)\"/g;
-    re1.exec(text);
-    result.hash_id = RegExp.$1;
-    // re2.exec(text);
-    // result.name = RegExp.$1;
-    re3.exec(text);
-    result.url = RegExp.$1;
-    return result;
+    var $ = cheerio.load(text);
+    return {
+        username: $('a[title][href]').attr('href').replace(/^\/people\//,'')
+    };
 }
 
 function consoleLog(x) {

@@ -1,5 +1,5 @@
 import fetchFollwerOrFollwee from './fetchFollwerOrFollwee';
-import getUser from './getUser';
+const zhihuAPI = require('zhihu');
 import config from '../spider.config';
 import co from 'co';
 import 'babel-polyfill';
@@ -8,37 +8,39 @@ import Storage from './Storage';
 import Queue from 'promise-queue';
 
 var storage;
-var SpiderControl = {
-    urls: new Set(),
-    lastDepthJobCount : 0,
-    lastDepthJobEnd : 0
-}
+var SpiderControl;
 
 var queue = new Queue(config.concurrency, Infinity);
 
-export function Spider(userPageUrl, socket, database) {
+export function Spider(username, socket, database) {
     if(!storage)
         storage = Storage(database);
-    co(SpiderMain(userPageUrl, socket, 0));
+    if(!SpiderControl)
+        SpiderControl  = {
+            usernames: new Set(),
+            lastDepthJobCount : 0,
+            lastDepthJobEnd : 0
+        }
+    co(SpiderMain(username, socket, 0));
 }
 
 var merge = (s1, s2) => s1.concat(s2.filter(ele => !s1.includes(ele)));
 
-var spiderPromiseGenerator = (userPageUrl, socket, depth) => {
-    return co(SpiderMain,userPageUrl, socket, depth);
+var spiderPromiseGenerator = (username, socket, depth) => {
+    return co(SpiderMain,username, socket, depth);
 }
-function* SpiderMain(userPageUrl, socket, depth) {
+function* SpiderMain(username, socket, depth) {
     try {
-        //console.log(`captureing : ${userPageUrl}`);
-        if(SpiderControl.urls.has(userPageUrl)){
+        //console.log(`captureing : ${username}`);
+        if(SpiderControl.usernames.has(username)){
             return
         }else{
-            SpiderControl.urls.add(userPageUrl);
+            SpiderControl.usernames.add(username);
         }
         
         var user;
         
-        var userFromDB = yield storage.getUser(userPageUrl);
+        var userFromDB = yield storage.getUser(username);
         
         var isUpdate, isFromDB, shouldSave;
         if(userFromDB){
@@ -53,20 +55,20 @@ function* SpiderMain(userPageUrl, socket, depth) {
             user = userFromDB;
         }else{
             //======抓取目标用户信息======//
-            //URL -> user{id, name, followerAmount, followeeAmount}
-            user = yield getUser(userPageUrl);
+            //username -> user{id, name, ...(see zhihu api)}
+            user = yield zhihuAPI.User.getUserByName(username);
         }
-        socket.emit('notice', '抓取用户信息成功');
-        socket.emit('get user', user);
+        if(user){
+            socket.emit('notice', `抓取用户信息成功: ${username}`);
+            socket.emit('get user', user);
+        }else{
+            socket.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
+            return null;
+        }
         
-
-        // should grep next level
-        if(depth >= config.depth){
-            return user;
-        }
         // save user TODO
         if(shouldSave){
-            var dbUser = formDBUser(user, userPageUrl);
+            var dbUser = formDBUser(user, username);
             if(isUpdate){
                 yield storage.updateUser(user, {$set: dbUser});
             }else{
@@ -74,9 +76,15 @@ function* SpiderMain(userPageUrl, socket, depth) {
             }
         }
         
+        // should grep next level
+        if(depth >= config.depth){
+            return user;
+        }
+
+        
         //======抓下一層======//
         //抓取目标用户好友列表
-        //user -> [ friend{id, name, url}... ]
+        //user -> [ friend-username ]
         var friends;
         if(isUpdate){
             friends = yield getFriendsFromWeb(user, socket);
@@ -121,10 +129,9 @@ function shouldUpdate(user){
     return user.updateTime < needsUpdateTime();
 }
 
-var formDBUser = (user, url) => {
-    user._id = user.hash_id;
+var formDBUser = (user, username) => {
     user.updateTime = now();
-    user.url = url;
+    user.username = username;
     return user;
 }
 
@@ -151,8 +158,8 @@ function* getFriendsFromWeb(user, socket) {
         }, socket)
     ];
     
-    var followees = works[0].map(f=>f.url);
-    var followers = works[1].map(f=>f.url);
+    var followees = works[0].map(f=>f.username);
+    var followers = works[1].map(f=>f.username);
     
     yield storage.updateUser(user, {$set: {followers: followers, followees: followees}});
     
@@ -160,6 +167,7 @@ function* getFriendsFromWeb(user, socket) {
     return friends;
 }
 
+// not used
 function searchSameFriend(aFriend, myFriends, socket) {
     if (!socket) {
         socket = {

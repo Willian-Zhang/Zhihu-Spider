@@ -10,8 +10,8 @@ export default function Storage(database){
     }
 }
 
-function* getUser(url){
-    return yield collection.findOne({url: url});
+function* getUser(username){
+    return yield collection.findOne({username: username});
 }
 function* updateUser(user, updates){
     return yield collection.findOneAndUpdate({_id:user.hash_id}, updates);
