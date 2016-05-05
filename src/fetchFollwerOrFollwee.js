@@ -7,11 +7,10 @@ import _ from 'lodash';
 export default function fetchFollwerOrFollwee(options, socket) {
     var user = options.user;
     var isFollowees = options.isFollowees;
-    var grounpAmount = isFollowees ? Math.ceil(user.followee||0 / 20) : Math.ceil(user.follower||0 / 20);
-    var offsets = [];
-    for (var i = 0; i < grounpAmount; i++) {
-        offsets.push(i * 20);
-    }
+    var grepAmount = (isFollowees ? user.followee : user.follower) || 0;
+    var grounpAmount = Math.ceil(grepAmount / 20);
+    var offsets = Array.from({length: grounpAmount}, (_, k) => k*20)
+    
     return Promise.map(offsets,
         offset => getFollwerOrFollwee(user, offset, isFollowees, socket),
         { concurrency: 1 }
