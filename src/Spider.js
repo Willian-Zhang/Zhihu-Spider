@@ -37,11 +37,11 @@ function* SpiderMain(username, socket, depth) {
         }else{
             SpiderControl.usernames.add(username);
         }
-        
+
         var user;
-        
+
         var userFromDB = yield storage.getUser(username);
-        
+
         var isUpdate, isFromDB, shouldSave;
         if(userFromDB){
             shouldSave = isUpdate = shouldUpdate(userFromDB)
@@ -50,7 +50,7 @@ function* SpiderMain(username, socket, depth) {
             isUpdate = isFromDB = false;
             shouldSave = true;
         }
-        
+
         if( isFromDB ){
             user = userFromDB;
         }else{
@@ -65,7 +65,7 @@ function* SpiderMain(username, socket, depth) {
             socket.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
             return null;
         }
-        
+
         // save user TODO
         if(shouldSave){
             var dbUser = formDBUser(user, username);
@@ -75,13 +75,13 @@ function* SpiderMain(username, socket, depth) {
                 yield storage.insertUser(dbUser);
             }
         }
-        
+
         // should grep next level
         if(depth >= config.depth){
             return user;
         }
 
-        
+
         //======抓下一層======//
         //抓取目标用户好友列表
         //user -> [ friend-username ]
@@ -91,19 +91,19 @@ function* SpiderMain(username, socket, depth) {
         }else{
             friends = yield getFriends(user, socket);
         }
-        
+
         //[ friend ] => ??
         friends.map(friend => () => spiderPromiseGenerator(friend, socket, depth+1) ).map(gen => queue.add(gen));
 
         return ;
-        
-        
+
+
         // socket.emit('data', myFriends.map(friend => ({
         //     "user": friend,
         //     "sameFriends": []
         // })));
 
-        
+
         //======找出相同好友======//
         // var result = yield Promise.map(myFriends,
         //     myFriend => searchSameFriend(myFriend, myFriends, socket),
@@ -143,7 +143,8 @@ function* getFriends(user, socket){
     }
     if(user.followers){
         socket.emit('notice', `${user.name} 的好友不用抓取`);
-        return merge(user.followers, user.followees);
+        return user.followers;
+        //return merge(user.followers, user.followees);
     }
     return yield getFriendsFromWeb(user, socket);
 }
@@ -154,23 +155,25 @@ function* getFriendsFromWeb(user, socket) {
             emit: () => {}
         };
     }
-    var works = yield [   
-        fetchFollwerOrFollwee({
-            isFollowees: true,
-            user: user
-        }, socket),
+    var works = yield [
+        // fetchFollwerOrFollwee({
+        //     isFollowees: true,
+        //     user: user
+        // }, socket),
         fetchFollwerOrFollwee({
             user: user
         }, socket)
     ];
-    
-    var followees = works[0].map(f=>f.username);
+
+    // var followees = works[0].map(f=>f.username);
     var followers = works[1].map(f=>f.username);
-    
-    yield storage.updateUser(user, {$set: {followers: followers, followees: followees}});
-    
-    var friends = merge(followers,followees);
-    return friends;
+
+    yield storage.updateUser(user, {$set: {followers: followers}});
+    return followers;
+    // yield storage.updateUser(user, {$set: {followers: followers, followees: followees}});
+    //
+    // var friends = merge(followers,followees);
+    // return friends;
 }
 
 // not used
