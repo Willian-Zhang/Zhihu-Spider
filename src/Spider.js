@@ -24,9 +24,12 @@ export function Spider(userPageUrl, socket, database) {
 
 var merge = (s1, s2) => s1.concat(s2.filter(ele => !s1.includes(ele)));
 
-
+var spiderPromiseGenerator = (userPageUrl, socket, depth) => {
+    return co(SpiderMain,userPageUrl, socket, depth);
+}
 function* SpiderMain(userPageUrl, socket, depth) {
     try {
+        //console.log(`captureing : ${userPageUrl}`);
         if(SpiderControl.urls.has(userPageUrl)){
             return
         }else{
@@ -80,12 +83,11 @@ function* SpiderMain(userPageUrl, socket, depth) {
         }else{
             friends = yield getFriends(user, socket);
         }
-        console.log(friends);
+        console.log(friends.length);
         
         //[ friend ] => ??
-        friends.map(friend => ()=> new Promise(SpiderMain(friend, socket, depth+1)) ).map(queue.add);
-        
-        
+        friends.map(friend => () => spiderPromiseGenerator(friend, socket, depth+1) ).map(gen => queue.add(gen));
+
         return ;
         
         
