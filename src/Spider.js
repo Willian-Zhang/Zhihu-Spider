@@ -83,7 +83,6 @@ function* SpiderMain(userPageUrl, socket, depth) {
         }else{
             friends = yield getFriends(user, socket);
         }
-        console.log(friends.length);
         
         //[ friend ] => ??
         friends.map(friend => () => spiderPromiseGenerator(friend, socket, depth+1) ).map(gen => queue.add(gen));
