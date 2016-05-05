@@ -32,12 +32,14 @@ var spiderPromiseGenerator = (username, socket, depth) => {
 function* SpiderMain(username, socket, depth) {
     try {
         //console.log(`captureing : ${username}`);
-        if(SpiderControl.usernames.has(username)){
-            return
-        }else{
+        var notInQueue = !SpiderControl.usernames.has(username);
+        if(notInQueue){
             SpiderControl.usernames.add(username);
+        }else{
+            detectIfLastOne(socket);
+            return null;
         }
-
+        
         var user;
 
         var userFromDB = yield storage.getUser(username);
@@ -58,16 +60,16 @@ function* SpiderMain(username, socket, depth) {
             //username -> user{id, name, ...(see zhihu api)}
             user = yield zhihuAPI.User.getUserByName(username);
         }
+
         if(user){
             socket.emit('notice', `獲取用户信息成功: ${username}, from ${isFromDB? 'DB' : 'Web'}`);
             socket.emit('get user', user);
         }else{
             socket.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
-            return null;
         }
 
         // save user TODO
-        if(shouldSave){
+        if(shouldSave && user){
             var dbUser = formDBUser(user, username);
             if(isUpdate){
                 yield storage.updateUser(user, {$set: dbUser});
@@ -75,10 +77,15 @@ function* SpiderMain(username, socket, depth) {
                 yield storage.insertUser(dbUser);
             }
         }
-
-        // should grep next level
+        
         if(depth >= config.depth){
+            detectIfLastOne(socket);
+            // should grep next level
             return user;
+        }
+        if(user == null){
+            console.log(`抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
+            return;
         }
 
 
@@ -90,6 +97,9 @@ function* SpiderMain(username, socket, depth) {
             friends = yield getFriendsFromWeb(user, socket);
         }else{
             friends = yield getFriends(user, socket);
+        }
+        if(depth == config.depth-1){
+            SpiderControl.lastDepthJobEnd += friends.length;
         }
 
         //[ friend ] => ??
@@ -116,6 +126,16 @@ function* SpiderMain(username, socket, depth) {
         console.log(err);
     }
 }
+function detectIfLastOne(socket){
+    SpiderControl.lastDepthJobCount++;
+    if(SpiderControl.lastDepthJobCount == SpiderControl.lastDepthJobEnd){
+        // THE END
+        socket.emit('notice', `capture ended with last level counting: ${SpiderControl.lastDepthJobCount}`);
+        
+        
+    }
+}
+
 
 // in milliseconds
 function now(){

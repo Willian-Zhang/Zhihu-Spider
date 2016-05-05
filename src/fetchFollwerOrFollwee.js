@@ -47,7 +47,7 @@ function getFollwerOrFollwee(user, offset, isFollowees, socket) {
                     throw ('Body is undefined');
                 }
             } catch (e) {
-                console.log(`${what} 抓取錯誤`);
+                console.log(`>>> ${what} 抓取錯誤`);
             }
             if (err) {
                 if (err.code == 'ETIMEDOUT' || err.code == 'ESOCKETTIMEDOUT') {
