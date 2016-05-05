@@ -176,17 +176,17 @@ function* getFriendsFromWeb(user, socket) {
         };
     }
     var works = yield [
+        fetchFollwerOrFollwee({
+            user: user
+        }, socket),
         // fetchFollwerOrFollwee({
         //     isFollowees: true,
         //     user: user
         // }, socket),
-        fetchFollwerOrFollwee({
-            user: user
-        }, socket)
     ];
 
-    // var followees = works[0].map(f=>f.username);
-    var followers = works[1].map(f=>f.username);
+    var followers = works[0].map(f=>f.username);
+    // var followees = works[1].map(f=>f.username);
 
     yield storage.updateUser(user, {$set: {followers: followers}});
     return followers;
