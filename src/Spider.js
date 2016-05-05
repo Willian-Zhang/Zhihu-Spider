@@ -55,9 +55,9 @@ function* SpiderMain(userPageUrl, socket, depth) {
             //======抓取目标用户信息======//
             //URL -> user{id, name, followerAmount, followeeAmount}
             user = yield getUser(userPageUrl);
-            socket.emit('notice', '抓取用户信息成功');
-            socket.emit('get user', user);
         }
+        socket.emit('notice', '抓取用户信息成功');
+        socket.emit('get user', user);
         
 
         // should grep next level
@@ -94,9 +94,7 @@ function* SpiderMain(userPageUrl, socket, depth) {
         //     "user": friend,
         //     "sameFriends": []
         // })));
-        
-        
-        
+
         
         //======找出相同好友======//
         // var result = yield Promise.map(myFriends,
