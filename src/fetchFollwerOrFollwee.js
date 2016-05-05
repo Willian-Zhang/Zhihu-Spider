@@ -37,7 +37,7 @@ function getFollwerOrFollwee(user, offset, isFollowees, socket) {
                 'cache-control': 'no-cache',
                 'x-requested-with': 'XMLHttpRequest'
             },
-            timeout: 1500
+            timeout: 3000
         }, (err, res, body) => {
             var tmp = [];
             try {

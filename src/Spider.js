@@ -58,7 +58,15 @@ function* SpiderMain(username, socket, depth) {
         }else{
             //======抓取目标用户信息======//
             //username -> user{id, name, ...(see zhihu api)}
-            user = yield zhihuAPI.User.getUserByName(username);
+            user = yield zhihuAPI.User.getUserByName(username).catch(
+                (e)=>zhihuAPI.User.getUserByName(username).catch(
+                    (e)=>{
+                        socket.emit('notice', `抓取用户信息失敗: ${username}, QAQ`);
+                        console.log(`抓取用户信息失敗: ${username}, QAQ`);
+                        return null;
+                    }
+                )
+            );
         }
 
         if(user){
@@ -66,6 +74,7 @@ function* SpiderMain(username, socket, depth) {
             socket.emit('get user', user);
         }else{
             socket.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
+            console.log(`抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
         }
 
         // save user TODO
@@ -84,7 +93,6 @@ function* SpiderMain(username, socket, depth) {
             return user;
         }
         if(user == null){
-            console.log(`抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
             return;
         }
 
