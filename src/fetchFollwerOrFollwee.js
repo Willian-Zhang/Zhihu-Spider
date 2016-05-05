@@ -14,7 +14,7 @@ export default function fetchFollwerOrFollwee(options, socket) {
     }
     return Promise.map(offsets,
         offset => getFollwerOrFollwee(user, offset, isFollowees, socket),
-        { concurrency: config.concurrency ? config.concurrency : 3 }
+        { concurrency: 1 }
     )
     .then(array => _.flatten(array))
 }
