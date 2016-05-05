@@ -14,7 +14,7 @@ function* getUser(username){
     return yield collection.findOne({username: username});
 }
 function* updateUser(user, updates){
-    return yield collection.findOneAndUpdate({_id:user.hash_id}, updates);
+    return yield collection.findOneAndUpdate({username:user.username}, updates);
 }
 function* insertUser(user){
     return yield collection.insertOne(user);

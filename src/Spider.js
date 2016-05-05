@@ -136,7 +136,13 @@ var formDBUser = (user, username) => {
 }
 
 function* getFriends(user, socket){
+    if (!socket) {
+        socket = {
+            emit: () => {}
+        };
+    }
     if(user.followers){
+        socket.emit('notice', `${user.name} 的好友不用抓取`);
         return merge(user.followers, user.followees);
     }
     return yield getFriendsFromWeb(user, socket);
