@@ -1,6 +1,6 @@
 import fetchFollwerOrFollwee from './fetchFollwerOrFollwee';
 const zhihuAPI = require('zhihu');
-const EventEmitter = require('events').EventEmitter;
+const EventEmitter = require('eventemitter2').EventEmitter2;
 
 import config from '../spider.config';
 import co from 'co';
@@ -24,16 +24,22 @@ export function Spider(username, socket, database) {
             lastDepthJobCount : 0,
             lastDepthJobEnd : 0
         }
-    var triggerSocket = function(anything){
-        var name = Object.getOwnPropertyNames(this._events)[0];
-        if(socket) socket.emit(name, anything);
-        // TODO on or off
-        console.log(`[${name}] ${anything}`);
-    }
-    event.on('notice',triggerSocket);
-    event.on('error', triggerSocket);
-    event.on('finish',triggerSocket);
-    event.on('get user', triggerSocket);
+        
+    event.onAny(function(event, value) {
+        switch (event) {
+            case 'notice':
+            case 'error':
+            case 'get user':
+                if(socket) socket.emit(event, value);
+                break;
+        }
+        switch (event) {
+            case 'error':
+            case 'finish':
+                console.log(`[${event}] ${value}`)
+                break;
+        }
+    });
     
     co(SpiderMain(username, 0));
 }
@@ -75,7 +81,7 @@ function* SpiderMain(username, depth) {
             user = yield zhihuAPI.User.getUserByName(username).catch(
                 (e)=>zhihuAPI.User.getUserByName(username).catch(
                     (e)=>{
-                        event.emit('notice', `抓取用户信息失敗: ${username}, QAQ`);
+                        event.emit('error', `抓取用户信息失敗: ${username}, QAQ`);
                         return null;
                     }
                 )
@@ -86,7 +92,7 @@ function* SpiderMain(username, depth) {
             event.emit('notice', `獲取用户信息成功: ${username}, from ${isFromDB? 'DB' : 'Web'}`);
             event.emit('get user', user);
         }else{
-            event.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
+            event.emit('error', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
         }
 
         // save user TODO
@@ -99,7 +105,7 @@ function* SpiderMain(username, depth) {
             }
         }
     }catch(e){
-        event.emit('notice', err);
+        event.emit('error', err);
         detectIfLastOne();
     }
     try{
@@ -146,7 +152,7 @@ function* SpiderMain(username, depth) {
         // event.emit('data', result);
 
     } catch (err) {
-        event.emit('notice', err);
+        event.emit('error', err);
     }
 }
 function detectIfLastOne(){
@@ -179,7 +185,7 @@ var formDBUser = (user, username) => {
 
 function* getFriends(user){
     if(user.followers){
-        event.emit('notice', `${user.name} 的好友不用抓取`);
+        event.emit('info', `${user.name} 的好友不用抓取`);
         return user.followers;
         //return merge(user.followers, user.followees);
     }
