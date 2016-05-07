@@ -98,7 +98,11 @@ function* SpiderMain(username, depth) {
                 yield storage.insertUser(dbUser);
             }
         }
-        
+    }catch(e){
+        event.emit('notice', err);
+        detectIfLastOne();
+    }
+    try{
         if(depth >= config.depth){
             detectIfLastOne();
             // should grep next level
