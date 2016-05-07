@@ -1,5 +1,7 @@
 import fetchFollwerOrFollwee from './fetchFollwerOrFollwee';
 const zhihuAPI = require('zhihu');
+const EventEmitter = require('events').EventEmitter;
+
 import config from '../spider.config';
 import co from 'co';
 import 'babel-polyfill';
@@ -9,6 +11,7 @@ import Queue from 'promise-queue';
 
 var storage;
 var SpiderControl;
+var event = new EventEmitter();
 
 var queue = new Queue(config.concurrency, Infinity);
 
@@ -21,22 +24,33 @@ export function Spider(username, socket, database) {
             lastDepthJobCount : 0,
             lastDepthJobEnd : 0
         }
-    co(SpiderMain(username, socket, 0));
+    var triggerSocket = function(anything){
+        var name = Object.getOwnPropertyNames(this._events)[0];
+        if(socket) socket.emit(name, anything);
+        // TODO on or off
+        console.log(`[${name}] ${anything}`);
+    }
+    event.on('notice',triggerSocket);
+    event.on('error', triggerSocket);
+    event.on('finish',triggerSocket);
+    event.on('get user', triggerSocket);
+    
+    co(SpiderMain(username, 0));
 }
 
 var merge = (s1, s2) => s1.concat(s2.filter(ele => !s1.includes(ele)));
 
-var spiderPromiseGenerator = (username, socket, depth) => {
-    return co(SpiderMain,username, socket, depth);
+var spiderPromiseGenerator = (username, depth) => {
+    return co(SpiderMain, username, depth);
 }
-function* SpiderMain(username, socket, depth) {
+function* SpiderMain(username, depth) {
     try {
         //console.log(`captureing : ${username}`);
         var notInQueue = !SpiderControl.usernames.has(username);
         if(notInQueue){
             SpiderControl.usernames.add(username);
         }else{
-            detectIfLastOne(socket);
+            detectIfLastOne();
             return null;
         }
         
@@ -61,8 +75,7 @@ function* SpiderMain(username, socket, depth) {
             user = yield zhihuAPI.User.getUserByName(username).catch(
                 (e)=>zhihuAPI.User.getUserByName(username).catch(
                     (e)=>{
-                        socket.emit('notice', `抓取用户信息失敗: ${username}, QAQ`);
-                        console.log(`抓取用户信息失敗: ${username}, QAQ`);
+                        event.emit('notice', `抓取用户信息失敗: ${username}, QAQ`);
                         return null;
                     }
                 )
@@ -70,11 +83,10 @@ function* SpiderMain(username, socket, depth) {
         }
 
         if(user){
-            socket.emit('notice', `獲取用户信息成功: ${username}, from ${isFromDB? 'DB' : 'Web'}`);
-            socket.emit('get user', user);
+            event.emit('notice', `獲取用户信息成功: ${username}, from ${isFromDB? 'DB' : 'Web'}`);
+            event.emit('get user', user);
         }else{
-            socket.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
-            console.log(`抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
+            event.emit('notice', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
         }
 
         // save user TODO
@@ -88,7 +100,7 @@ function* SpiderMain(username, socket, depth) {
         }
         
         if(depth >= config.depth){
-            detectIfLastOne(socket);
+            detectIfLastOne();
             // should grep next level
             return user;
         }
@@ -102,21 +114,21 @@ function* SpiderMain(username, socket, depth) {
         //user -> [ friend-username ]
         var friends;
         if(isUpdate){
-            friends = yield getFriendsFromWeb(user, socket);
+            friends = yield getFriendsFromWeb(user);
         }else{
-            friends = yield getFriends(user, socket);
+            friends = yield getFriends(user);
         }
         if(depth == config.depth-1){
             SpiderControl.lastDepthJobEnd += friends.length;
         }
 
         //[ friend ] => ??
-        friends.map(friend => () => spiderPromiseGenerator(friend, socket, depth+1) ).map(gen => queue.add(gen));
+        friends.map(friend => () => spiderPromiseGenerator(friend, depth+1) ).map(gen => queue.add(gen));
 
         return ;
 
 
-        // socket.emit('data', myFriends.map(friend => ({
+        // event.emit('data', myFriends.map(friend => ({
         //     "user": friend,
         //     "sameFriends": []
         // })));
@@ -124,23 +136,21 @@ function* SpiderMain(username, socket, depth) {
 
         //======找出相同好友======//
         // var result = yield Promise.map(myFriends,
-        //     myFriend => searchSameFriend(myFriend, myFriends, socket),
+        //     myFriend => searchSameFriend(myFriend, myFriends),
         //     { concurrency: config.concurrency }
         // );
-        // socket.emit('data', result);
+        // event.emit('data', result);
 
     } catch (err) {
-        socket.emit('notice', err);
-        console.log(err);
+        event.emit('notice', err);
     }
 }
-function detectIfLastOne(socket){
+function detectIfLastOne(){
     SpiderControl.lastDepthJobCount++;
     if(SpiderControl.lastDepthJobCount == SpiderControl.lastDepthJobEnd){
         // THE END
-        socket.emit('notice', `capture ended with last level counting: ${SpiderControl.lastDepthJobCount}`);
-        
-        
+        event.emit('notice', `capture ended with last level counting: ${SpiderControl.lastDepthJobCount}`);
+        event.emit('finish', SpiderControl.lastDepthJobCount);
     }
 }
 
@@ -163,34 +173,24 @@ var formDBUser = (user, username) => {
     return user;
 }
 
-function* getFriends(user, socket){
-    if (!socket) {
-        socket = {
-            emit: () => {}
-        };
-    }
+function* getFriends(user){
     if(user.followers){
-        socket.emit('notice', `${user.name} 的好友不用抓取`);
+        event.emit('notice', `${user.name} 的好友不用抓取`);
         return user.followers;
         //return merge(user.followers, user.followees);
     }
-    return yield getFriendsFromWeb(user, socket);
+    return yield getFriendsFromWeb(user);
 }
 
-function* getFriendsFromWeb(user, socket) {
-    if (!socket) {
-        socket = {
-            emit: () => {}
-        };
-    }
+function* getFriendsFromWeb(user) {
     var works = yield [
         fetchFollwerOrFollwee({
             user: user
-        }, socket),
+        }, event),
         // fetchFollwerOrFollwee({
         //     isFollowees: true,
         //     user: user
-        // }, socket),
+        // }, event),
     ];
 
     var followers = works[0].map(f=>f.username);
@@ -205,36 +205,31 @@ function* getFriendsFromWeb(user, socket) {
 }
 
 // not used
-function searchSameFriend(aFriend, myFriends, socket) {
-    if (!socket) {
-        socket = {
-            emit: () => {}
-        };
-    }
-    socket.emit("notice", "searchSameFriend with " + aFriend.name + "......");
-    console.log("searchSameFriend with " + aFriend.name + "......");
-    return getFriends(aFriend, socket)
-        .then(targetFriends => {
-            var sameFriends = [];
-            console.log('counting for ' + aFriend.name + '......')
-            targetFriends.forEach(targetFriend => {
-                myFriends.forEach(myFriend => {
-                    if (targetFriend.hash_id === myFriend.hash_id) {
-                        sameFriends.push(targetFriend);
-                    }
-                })
-            })
-            console.log("\n\n==============\n Same Friends with " + aFriend.name + "\n");
-            socket.emit('same friend', {
-                hash_id: aFriend.hash_id,
-                sameFriends: sameFriends
-            })
-            console.log(sameFriends);
-            console.log("\n\n");
+// function searchSameFriend(aFriend, myFriends) {
+//     event.emit("notice", "searchSameFriend with " + aFriend.name + "......");
+//     console.log("searchSameFriend with " + aFriend.name + "......");
+//     return getFriends(aFriend)
+//         .then(targetFriends => {
+//             var sameFriends = [];
+//             console.log('counting for ' + aFriend.name + '......')
+//             targetFriends.forEach(targetFriend => {
+//                 myFriends.forEach(myFriend => {
+//                     if (targetFriend.hash_id === myFriend.hash_id) {
+//                         sameFriends.push(targetFriend);
+//                     }
+//                 })
+//             })
+//             console.log("\n\n==============\n Same Friends with " + aFriend.name + "\n");
+//             event.emit('same friend', {
+//                 hash_id: aFriend.hash_id,
+//                 sameFriends: sameFriends
+//             })
+//             console.log(sameFriends);
+//             console.log("\n\n");
 
-            return {
-                user: aFriend,
-                sameFriends: sameFriends
-            };
-        })
-}
+//             return {
+//                 user: aFriend,
+//                 sameFriends: sameFriends
+//             };
+//         })
+// }
