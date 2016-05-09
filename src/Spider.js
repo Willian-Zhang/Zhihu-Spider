@@ -1,7 +1,5 @@
 import fetchFollwerOrFollwee from './fetchFollwerOrFollwee';
 const zhihuAPI = require('zhihu');
-const EventEmitter = require('eventemitter2').EventEmitter2;
-
 import config from '../spider.config';
 import co from 'co';
 import 'babel-polyfill';
@@ -11,11 +9,11 @@ import Queue from 'promise-queue';
 
 var storage;
 var SpiderControl;
-var event = new EventEmitter();
+var event;
 
 var queue = new Queue(config.concurrency, Infinity);
 
-export function Spider(username, socket, database) {
+export function Spider(username, overallEvent, database) {
     if(!storage)
         storage = Storage(database);
     if(!SpiderControl)
@@ -24,23 +22,9 @@ export function Spider(username, socket, database) {
             lastDepthJobCount : 0,
             lastDepthJobEnd : 0
         }
-        
-    event.onAny(function(event, value) {
-        switch (event) {
-            case 'notice':
-            case 'error':
-            case 'get user':
-                if(socket) socket.emit(event, value);
-                break;
-        }
-        switch (event) {
-            case 'error':
-            case 'finish':
-                console.log(`[${event}] ${value}`)
-                break;
-        }
-    });
-    
+    if(!event)
+        event = overallEvent;
+    console.time('fetch');
     co(SpiderMain(username, 0));
 }
 
@@ -75,6 +59,8 @@ function* SpiderMain(username, depth) {
 
         if( isFromDB ){
             user = userFromDB;
+            event.emit('notice', `獲取用户信息成功(from DB): ${username}`);
+            event.emit('get user', user);
         }else{
             //======抓取目标用户信息======//
             //username -> user{id, name, ...(see zhihu api)}
@@ -86,12 +72,11 @@ function* SpiderMain(username, depth) {
                     }
                 )
             );
+            event.emit('notice', `獲取用户信息成功(from Web): ${username}`);
+            event.emit('get user', user);
         }
 
-        if(user){
-            event.emit('notice', `獲取用户信息成功: ${username}, from ${isFromDB? 'DB' : 'Web'}`);
-            event.emit('get user', user);
-        }else{
+        if(!user){
             event.emit('error', `抓取用户信息失敗: ${username}, 用戶名正確嗎？`);
         }
 
@@ -161,6 +146,7 @@ function detectIfLastOne(){
         // THE END
         event.emit('notice', `capture ended with last level counting: ${SpiderControl.lastDepthJobCount}`);
         event.emit('finish', SpiderControl.lastDepthJobCount);
+        console.timeEnd('fetch');
     }
 }
 

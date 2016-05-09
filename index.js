@@ -8,23 +8,32 @@ var dbConfig = require('./database.config.js');
 var serverConfig = require('./server.config');
 var co = require('co');
 var MongoClient = require('mongodb').MongoClient;
+const EventEmitter = require('eventemitter2').EventEmitter2;
+var event = new EventEmitter();
 
 var db;
 io.on('connection', function(socket) {
+    event.onAny(function(event, value) {
+        if(serverConfig.event.client.includes(event))
+            if(socket) socket.emit(event, value);
+            
+        if(serverConfig.event.log.includes(event))
+            console.log(`[${event}] ${value}`);
+    });
     co(function *(){
       try {
         //======打開數據庫======//
         if(!db){
           db = yield MongoClient.connect(`mongodb://${dbConfig.address}:${dbConfig.port}/${dbConfig.dbname}`);
-          socket.emit('notice', '數據庫 connected');
+          event.emit('notice', '數據庫 connected');
         }else{
-          socket.emit('notice', '數據庫 ready');
+          event.emit('notice', '數據庫 ready');
         }
         socket.on('fetch start', function(data) {
-            Spider(data.url, socket, db);
+            Spider(data.url, event, db);
         });
       } catch (e) {
-        socket.emit('notice', '數據庫 error');
+        event.emit('error', '數據庫 error');
         console.log(e);
       }
     });
